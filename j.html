@@ -1,0 +1,841 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, minimum-scale=1.0">
+  <title>group Chat</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+  <style>
+    :root {
+      --primary: #008069;
+      --primary-dark: #005c4b;
+      --msg-out: #d9fdd3;
+      --msg-in: #ffffff;
+      --admin-msg: #fff9c4;
+      --danger: #ea0038;
+      --bg-main: #eae6df;
+      --bg-chat: #efeae2;
+      --text-primary: #111b21;
+      --text-secondary: #667781;
+      --header-bg: #008069;
+      --input-bg: #f0f2f5;
+      --shadow: 0 1px 2px rgba(0,0,0,0.08);
+      --radius: 12px;
+      --transition: 0.25s ease;
+    }
+    body.dark {
+      --primary: #1f2c33;
+      --primary-dark: #182229;
+      --msg-out: #005c4b;
+      --msg-in: #1f2c33;
+      --admin-msg: #2a3942;
+      --bg-main: #0b141a;
+      --bg-chat: #0b141a;
+      --text-primary: #e9edef;
+      --text-secondary: #8696a0;
+      --header-bg: #1f2c33;
+      --input-bg: #1f2c33;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3);
+    }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    }
+    body {
+      background: #dddbd2;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background var(--transition);
+      overscroll-behavior: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body.dark { background: #111b21; }
+    .app {
+      width: 100%;
+      max-width: 800px;
+      height: 100vh;
+      background: var(--bg-main);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+      transition: background var(--transition);
+    }
+    @media (min-width: 800px) {
+      .app { height: 95vh; border-radius: 16px; }
+    }
+    .header {
+      background: var(--header-bg);
+      color: white;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 20;
+      min-height: 58px;
+      transition: background var(--transition);
+    }
+    .btn-icon {
+      background: none;
+      border: none;
+      color: white;
+      font-size: 1.3rem;
+      cursor: pointer;
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+      flex-shrink: 0;
+    }
+    .btn-icon:hover { background: rgba(255,255,255,0.12); }
+    .avatar {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      overflow: hidden;
+      flex-shrink: 0;
+      border: 2px solid rgba(255,255,255,0.3);
+      background: linear-gradient(135deg, #4caf50, #1b5e20);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+    }
+    .avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .header-info { flex: 1; min-width: 0; }
+    .header-title {
+      font-weight: 600;
+      font-size: 1.05rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .header-subtitle {
+      font-size: 0.73rem;
+      opacity: 0.85;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .header-actions { display: flex; gap: 2px; position: relative; }
+    .dropdown {
+      position: absolute;
+      top: 48px;
+      right: 0;
+      background: var(--msg-in);
+      border-radius: var(--radius);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+      min-width: 210px;
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+      z-index: 100;
+      animation: slideDown 0.15s ease;
+    }
+    .dropdown.active { display: flex; }
+    @keyframes slideDown { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+    .dropdown-item {
+      padding: 13px 18px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transition: background 0.15s;
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+    }
+    .dropdown-item:hover { background: rgba(0,0,0,0.04); }
+    .dropdown-item i { color: var(--primary); width: 18px; text-align: center; }
+    .dropdown-item.danger { color: var(--danger); }
+    .dropdown-item.danger i { color: var(--danger); }
+    .hidden { display: none !important; }
+    .chat-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      background-color: var(--bg-chat);
+      transition: background var(--transition);
+      background-image: radial-gradient(circle at 25% 35%, rgba(0,0,0,0.015) 1px, transparent 1px), radial-gradient(circle at 75% 65%, rgba(0,0,0,0.015) 1px, transparent 1px);
+      background-size: 50px 50px;
+      will-change: scroll-position;
+    }
+    .encryption-notice {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 8px 16px;
+      margin: 4px 0 12px;
+      background: #fff3e0;
+      border-radius: var(--radius);
+      font-size: 0.78rem;
+      color: #e65100;
+      box-shadow: var(--shadow);
+      flex-shrink: 0;
+    }
+    body.dark .encryption-notice { background: #2a3942; color: #ffb74d; }
+    .msg-row { display: flex; margin-bottom: 2px; }
+    .msg-row.out { justify-content: flex-end; }
+    .msg-row.in { justify-content: flex-start; }
+    .msg-bubble {
+      max-width: 75%;
+      padding: 8px 12px 6px;
+      border-radius: var(--radius);
+      position: relative;
+      box-shadow: var(--shadow);
+      animation: msgIn 0.2s ease;
+      word-break: break-word;
+      transition: background var(--transition), color var(--transition);
+    }
+    @keyframes msgIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+    .msg-bubble.out { background: var(--msg-out); color: var(--text-primary); border-top-right-radius: 2px; }
+    .msg-bubble.in { background: var(--msg-in); color: var(--text-primary); border-top-left-radius: 2px; }
+    .msg-bubble.admin { background: var(--admin-msg); border-left: 3px solid #ffc107; }
+    .msg-sender { font-size: 0.78rem; font-weight: 700; color: #4caf50; margin-bottom: 3px; }
+    .msg-sender .admin-tag { background: #ff9800; color: white; padding: 1px 7px; border-radius: 10px; font-size: 0.62rem; margin-left: 5px; font-weight: 600; }
+    .msg-text { font-size: 0.93rem; line-height: 1.45; }
+    .msg-image { max-width: 240px; border-radius: 8px; margin-top: 6px; cursor: pointer; display: block; transition: transform 0.2s; }
+    .msg-image:hover { transform: scale(1.02); }
+    .msg-meta { display: flex; justify-content: flex-end; align-items: center; gap: 4px; margin-top: 4px; font-size: 0.68rem; color: var(--text-secondary); }
+    .btn-delete-msg {
+      background: none; border: none; color: #bbb; cursor: pointer; font-size: 0.7rem; padding: 2px 4px; border-radius: 50%; opacity: 0; transition: all 0.2s;
+    }
+    .msg-bubble:hover .btn-delete-msg { opacity: 1; }
+    .btn-delete-msg:hover { color: var(--danger); background: rgba(0,0,0,0.05); }
+    .link-preview {
+      margin-top: 8px;
+      border: 1px solid rgba(0,0,0,0.08);
+      border-radius: 10px;
+      overflow: hidden;
+      background: rgba(0,0,0,0.02);
+    }
+    body.dark .link-preview { border-color: rgba(255,255,255,0.1); background: rgba(255,255,255,0.04); }
+    .link-preview iframe {
+      width: 100%;
+      height: 200px;
+      border: none;
+      display: block;
+    }
+    .link-preview .link-title {
+      padding: 8px 10px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .typing-bar {
+      padding: 3px 20px 4px;
+      background: var(--bg-chat);
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+      min-height: 22px;
+      font-style: italic;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: background var(--transition);
+    }
+    .input-bar {
+      background: var(--input-bg);
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: background var(--transition);
+    }
+    .input-field {
+      flex: 1;
+      background: var(--msg-in);
+      border: none;
+      border-radius: 24px;
+      padding: 11px 18px;
+      font-size: 0.93rem;
+      outline: none;
+      color: var(--text-primary);
+      box-shadow: var(--shadow);
+      transition: all 0.2s;
+    }
+    .input-field:focus { box-shadow: 0 0 0 2px rgba(0,128,105,0.25); }
+    .btn-attach {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 1.4rem;
+      cursor: pointer;
+      padding: 6px;
+      border-radius: 50%;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .btn-attach:hover { color: var(--primary); background: rgba(0,0,0,0.05); }
+    .btn-send {
+      background: var(--primary); border: none; color: white; width: 44px; height: 44px;
+      border-radius: 50%; cursor: pointer; font-size: 1.1rem; display: flex; align-items: center;
+      justify-content: center; transition: all 0.2s; flex-shrink: 0;
+    }
+    .btn-send:hover { background: var(--primary-dark); transform: scale(1.04); }
+    .upload-progress {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      padding: 4px 16px;
+      text-align: center;
+      background: var(--bg-chat);
+    }
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center;
+      z-index: 200; backdrop-filter: blur(3px);
+    }
+    .modal-overlay.active { display: flex; }
+    .modal {
+      background: var(--msg-in); border-radius: 16px; padding: 28px 24px; width: 340px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.3); animation: modalPop 0.2s ease;
+    }
+    @keyframes modalPop { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+    .modal h2 { font-size: 1.2rem; color: var(--primary); margin-bottom: 18px; display: flex; align-items: center; gap: 10px; }
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; font-size: 0.84rem; font-weight: 600; margin-bottom: 5px; color: var(--text-primary); }
+    .form-group input {
+      width: 100%; padding: 11px 14px; border: 1.5px solid #ddd; border-radius: var(--radius);
+      font-size: 0.93rem; outline: none; background: var(--msg-in); color: var(--text-primary); transition: border 0.2s;
+    }
+    .form-group input:focus { border-color: var(--primary); }
+    .btn-primary {
+      width: 100%; padding: 12px; background: var(--primary); color: white; border: none;
+      border-radius: 24px; font-weight: 600; font-size: 0.95rem; cursor: pointer; transition: background 0.2s; margin-top: 4px;
+    }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .error-msg { color: var(--danger); font-size: 0.8rem; text-align: center; margin-top: 8px; min-height: 20px; }
+    .chat-area::-webkit-scrollbar { width: 5px; }
+    .chat-area::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 10px; }
+    @media (max-width: 500px) {
+      .msg-bubble { max-width: 88%; }
+      .chat-area { padding: 12px 8px; }
+    }
+  </style>
+</head>
+<body class="light">
+<div class="app">
+  <header class="header">
+    <div class="avatar" id="avatarContainer">
+      <img src="pp.jpg" alt="Profile" id="profilePic" onerror="this.style.display='none'; this.parentElement.innerHTML='<i class=\'fas fa-user\' style=\'font-size:1.2rem;\'></i>';">
+    </div>
+    <div class="header-info">
+      <div class="header-title">private Chat</div>
+      <div class="header-subtitle">
+        <i class="fas fa-circle" style="font-size: 0.4rem; color: #4caf50;"></i>
+        <span id="onlineLabel">0 online</span>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="btn-icon" id="btnDarkMode" title="Dark Mode"><i class="fas fa-moon"></i></button>
+      <button class="btn-icon" id="btnMenu"><i class="fas fa-ellipsis-v"></i></button>
+      <div class="dropdown" id="dropdown">
+        <button class="dropdown-item" id="btnAdminLogin"><i class="fas fa-shield-alt"></i> Admin Login</button>
+        <button class="dropdown-item hidden" id="btnDeleteAll"><i class="fas fa-trash-alt"></i> Delete All</button>
+        <button class="dropdown-item" id="btnChangeName"><i class="fas fa-user-edit"></i> Change Username</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="chat-area" id="chatArea">
+    <div class="encryption-notice">
+      <i class="fas fa-lock"></i> <span>All Messages are end-to-end encrypted</span>
+    </div>
+  </div>
+
+  <div class="typing-bar" id="typingBar"></div>
+  <div class="upload-progress hidden" id="uploadProgress">📤 Processing image...</div>
+
+  <div class="input-bar">
+    <button class="btn-attach" id="btnAttach" title="Send image"><i class="fas fa-image"></i></button>
+    <input type="text" class="input-field" id="msgInput" placeholder="Message" autocomplete="off" maxlength="800">
+    <input type="file" id="imageInput" accept="image/*" style="display:none;">
+    <button class="btn-send" id="btnSend"><i class="fas fa-paper-plane"></i></button>
+  </div>
+</div>
+
+<!-- ADMIN LOGIN MODAL -->
+<div class="modal-overlay" id="adminModal">
+  <div class="modal">
+    <h2><i class="fas fa-shield-alt"></i> Admin Login</h2>
+    <div class="form-group"><label>Username</label><input type="text" id="adminUser" placeholder="admin" autocomplete="off"></div>
+    <div class="form-group"><label>Password</label><input type="password" id="adminPass" placeholder="admin123"></div>
+    <button class="btn-primary" id="btnLoginAdmin">Login</button>
+    <div class="error-msg" id="loginError"></div>
+  </div>
+</div>
+
+<!-- USERNAME MODAL -->
+<div class="modal-overlay" id="usernameModal">
+  <div class="modal">
+    <h2><i class="fas fa-user-edit"></i> Set Username</h2>
+    <div class="form-group"><label>Your display name</label><input type="text" id="newUsername" placeholder="Enter name" autocomplete="off" maxlength="25"></div>
+    <button class="btn-primary" id="btnSaveUsername">Save</button>
+    <div class="error-msg" id="usernameError"></div>
+  </div>
+</div>
+
+<!-- IMAGE PREVIEW MODAL -->
+<div class="modal-overlay" id="imagePreviewModal">
+  <div style="position: relative; max-width: 90vw; max-height: 90vh;">
+    <button style="position: absolute; top: -40px; right: 0; background: none; border: none; color: white; font-size: 2.5rem; cursor: pointer; z-index: 10;" id="btnClosePreview">&times;</button>
+    <img id="previewImage" style="max-width: 90vw; max-height: 85vh; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); cursor: pointer;" alt="Preview">
+  </div>
+</div>
+
+<script>
+(function() {
+  // Firebase initialization
+  firebase.initializeApp({
+    databaseURL: "https://storage-1-4f28a-default-rtdb.asia-southeast1.firebasedatabase.app"
+  });
+  const db = firebase.database();
+
+  // ✅ NEW: Random display name like "user1366" format
+  const generateRandomName = () => {
+    // Generates a 4-5 digit number after "user" (e.g., user1366, user7284, user10023)
+    const randomNum = Math.floor(Math.random() * 90000) + 10000; // range 10000-99999
+    return `user${randomNum}`;
+  };
+
+  const uid = 'u_' + Math.random().toString(36).slice(2, 10);
+  
+  // Username logic: localStorage থেকে নেবে, না থাকলে random generate করবে (userXXXX style)
+  let username = localStorage.getItem('plitebook_username');
+  if (!username) {
+    username = generateRandomName();
+    localStorage.setItem('plitebook_username', username);
+  }
+  
+  let isAdmin = false; // Normal user starts as non-admin
+  let onlineCount = 0;
+
+  // DOM elements cache
+  const chatArea = document.getElementById('chatArea');
+  const msgInput = document.getElementById('msgInput');
+  const btnSend = document.getElementById('btnSend');
+  const typingBar = document.getElementById('typingBar');
+  const dropdown = document.getElementById('dropdown');
+  const btnMenu = document.getElementById('btnMenu');
+  const btnAdminLogin = document.getElementById('btnAdminLogin');
+  const btnDeleteAll = document.getElementById('btnDeleteAll');
+  const btnChangeName = document.getElementById('btnChangeName');
+  const btnDarkMode = document.getElementById('btnDarkMode');
+  const adminModal = document.getElementById('adminModal');
+  const usernameModal = document.getElementById('usernameModal');
+  const btnLoginAdmin = document.getElementById('btnLoginAdmin');
+  const loginError = document.getElementById('loginError');
+  const onlineLabel = document.getElementById('onlineLabel');
+  const btnSaveUsername = document.getElementById('btnSaveUsername');
+  const newUsernameInput = document.getElementById('newUsername');
+  const usernameError = document.getElementById('usernameError');
+  const btnAttach = document.getElementById('btnAttach');
+  const imageInput = document.getElementById('imageInput');
+  const uploadProgress = document.getElementById('uploadProgress');
+  const imagePreviewModal = document.getElementById('imagePreviewModal');
+  const previewImage = document.getElementById('previewImage');
+  const btnClosePreview = document.getElementById('btnClosePreview');
+
+  const msgsRef = db.ref('messages');
+  const typingRef = db.ref('typing');
+  const usersRef = db.ref('users');
+
+  // DARK MODE
+  let isDark = localStorage.getItem('darkMode') === 'true';
+  function applyDark() {
+    document.body.classList.toggle('dark', isDark);
+    btnDarkMode.innerHTML = isDark ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+    localStorage.setItem('darkMode', isDark);
+  }
+  applyDark();
+  btnDarkMode.addEventListener('click', () => { isDark = !isDark; applyDark(); });
+
+  // Utility functions
+  function fmtTime(ts) {
+    const d = new Date(ts);
+    let h = d.getHours(), m = d.getMinutes();
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return `${h}:${m.toString().padStart(2, '0')} ${ampm}`;
+  }
+
+  function escHtml(t) {
+    const el = document.createElement('span');
+    el.textContent = t || '';
+    return el.innerHTML;
+  }
+
+  // Link detection for YouTube/Facebook
+  function detectLink(text) {
+    if (!text) return null;
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const match = text.match(urlRegex);
+    if (!match) return null;
+    for (let url of match) {
+      let embedUrl = null;
+      let platform = '';
+      const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/);
+      if (ytMatch) {
+        embedUrl = `https://www.youtube.com/embed/${ytMatch[1]}`;
+        platform = 'YouTube';
+      }
+      if (!embedUrl && url.includes('facebook.com')) {
+        embedUrl = `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&show_text=false`;
+        platform = 'Facebook';
+      }
+      if (embedUrl) {
+        return { embedUrl, platform, originalUrl: url };
+      }
+    }
+    return null;
+  }
+
+  // Render message
+  function renderMsg(snap) {
+    const m = snap.val();
+    if (!m || (!m.text && !m.imageBase64)) return;
+    const mid = snap.key;
+    const mine = m.uid === uid;
+    const row = document.createElement('div');
+    row.className = `msg-row ${mine ? 'out' : 'in'}`;
+    row.dataset.id = mid;
+
+    let bubbleClass = mine ? 'out' : 'in';
+    if (m.isAdmin && !mine) bubbleClass += ' admin';
+
+    let mediaHtml = '';
+    if (m.imageBase64) {
+      mediaHtml = `<img src="${m.imageBase64}" class="msg-image" loading="lazy" onclick="document.getElementById('previewImage').src=this.src; document.getElementById('imagePreviewModal').classList.add('active');" alt="shared image">`;
+    }
+
+    const linkData = !m.imageBase64 ? detectLink(m.text) : null;
+    let linkHtml = '';
+    if (linkData) {
+      linkHtml = `
+        <div class="link-preview">
+          <iframe src="${linkData.embedUrl}" allow="autoplay; encrypted-media" allowfullscreen loading="lazy"></iframe>
+          <div class="link-title"><i class="fas fa-external-link-alt"></i> ${linkData.platform} preview</div>
+        </div>`;
+    }
+
+    row.innerHTML = `
+      <div class="msg-bubble ${bubbleClass}">
+        ${!mine ? `<div class="msg-sender">${escHtml(m.name || 'User')}${m.isAdmin ? '<span class="admin-tag">Admin</span>' : ''}</div>` : ''}
+        ${m.text ? `<div class="msg-text">${escHtml(m.text)}</div>` : ''}
+        ${mediaHtml}
+        ${linkHtml}
+        <div class="msg-meta">
+          <span class="time">${fmtTime(m.ts)}</span>
+          ${isAdmin ? `<button class="btn-delete-msg" data-del="${mid}"><i class="fas fa-trash-alt"></i></button>` : ''}
+        </div>
+      </div>`;
+    chatArea.appendChild(row);
+    
+    // Auto-scroll if near bottom
+    if (chatArea.scrollHeight - chatArea.scrollTop - chatArea.clientHeight < 120) {
+      chatArea.scrollTop = chatArea.scrollHeight;
+    }
+  }
+
+  // Delete message handler
+  chatArea.addEventListener('click', e => {
+    const btn = e.target.closest('.btn-delete-msg');
+    if (!btn || !isAdmin) return;
+    if (confirm('Delete this message permanently?')) {
+      msgsRef.child(btn.dataset.del).remove();
+    }
+  });
+
+  msgsRef.on('child_removed', snap => {
+    const el = chatArea.querySelector(`[data-id="${snap.key}"]`);
+    if (el) {
+      el.style.opacity = '0';
+      el.style.transform = 'scale(0.9)';
+      el.style.transition = 'all 0.2s ease';
+      setTimeout(() => el.remove(), 200);
+    }
+  });
+
+  // Image preview modal
+  imagePreviewModal.addEventListener('click', (e) => {
+    if (e.target === imagePreviewModal || e.target === btnClosePreview) {
+      imagePreviewModal.classList.remove('active');
+    }
+  });
+  previewImage.addEventListener('click', (e) => {
+    e.stopPropagation();
+    window.open(previewImage.src, '_blank');
+  });
+
+  // Send message function
+  function sendMessage(text, imageBase64 = null) {
+    if (!text && !imageBase64) return;
+    const msgData = {
+      uid,
+      name: username,
+      text: text ? text.trim() : '',
+      ts: Date.now(),
+      isAdmin
+    };
+    if (imageBase64) {
+      msgData.imageBase64 = imageBase64;
+    }
+    msgsRef.push(msgData).catch(err => {
+      console.error('Send failed:', err);
+      alert('Failed to send message. Please try again.');
+    });
+    msgInput.value = '';
+    msgInput.focus();
+    typingRef.child(uid).remove();
+  }
+
+  btnSend.addEventListener('click', () => {
+    const text = msgInput.value.trim();
+    if (!text) return;
+    sendMessage(text);
+  });
+
+  msgInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      const text = msgInput.value.trim();
+      if (text) sendMessage(text);
+    }
+  });
+
+  // Image upload with Base64 (no Storage needed)
+  btnAttach.addEventListener('click', () => imageInput.click());
+
+  imageInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('Please select a valid image file.');
+      imageInput.value = '';
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Image size should be less than 10MB.');
+      imageInput.value = '';
+      return;
+    }
+
+    uploadProgress.classList.remove('hidden');
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const maxDim = 600;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const base64 = canvas.toDataURL('image/jpeg', 0.65);
+        uploadProgress.classList.add('hidden');
+        sendMessage('', base64);
+      };
+      img.onerror = () => {
+        uploadProgress.classList.add('hidden');
+        alert('Failed to load image.');
+      };
+      img.src = event.target.result;
+    };
+    reader.onerror = () => {
+      uploadProgress.classList.add('hidden');
+      alert('Failed to read file.');
+    };
+    reader.readAsDataURL(file);
+    imageInput.value = '';
+  });
+
+  // Typing indicator
+  let typingTimer;
+  msgInput.addEventListener('input', () => {
+    if (msgInput.value.trim()) {
+      typingRef.child(uid).set(username);
+      clearTimeout(typingTimer);
+      typingTimer = setTimeout(() => typingRef.child(uid).remove(), 2500);
+    } else {
+      typingRef.child(uid).remove();
+      clearTimeout(typingTimer);
+    }
+  });
+
+  typingRef.on('value', snap => {
+    const data = snap.val() || {};
+    const names = Object.values(data).filter(n => n && n !== username);
+    typingBar.innerHTML = names.length ? `<i class="fas fa-pencil-alt"></i> ${names.join(', ')} typing...` : '';
+  });
+
+  // Online users counter
+  usersRef.on('value', snap => {
+    const users = snap.val() || {};
+    onlineCount = Object.keys(users).length;
+    onlineLabel.textContent = `${onlineCount} online`;
+  });
+
+  // MENU toggle
+  btnMenu.addEventListener('click', e => {
+    e.stopPropagation();
+    dropdown.classList.toggle('active');
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!dropdown.contains(e.target) && e.target !== btnMenu) {
+      dropdown.classList.remove('active');
+    }
+  });
+
+  // ADMIN LOGIN (session only)
+  btnAdminLogin.addEventListener('click', () => {
+    dropdown.classList.remove('active');
+    if (isAdmin) {
+      alert('You are already logged in as Admin.');
+      return;
+    }
+    adminModal.classList.add('active');
+    document.getElementById('adminUser').value = '';
+    document.getElementById('adminPass').value = '';
+    loginError.textContent = '';
+    setTimeout(() => document.getElementById('adminUser').focus(), 100);
+  });
+
+  btnLoginAdmin.addEventListener('click', () => {
+    const user = document.getElementById('adminUser').value.trim();
+    const pass = document.getElementById('adminPass').value.trim();
+    if (user === 'admin' && pass === 'admin123') {
+      isAdmin = true;
+      username = 'Admin';
+      usersRef.child(uid).update({ name: 'Admin', isAdmin: true });
+      adminModal.classList.remove('active');
+      updateUI();
+      loginError.textContent = '';
+    } else {
+      loginError.textContent = '❌ Invalid credentials (admin / admin123)';
+    }
+  });
+
+  document.getElementById('adminPass').addEventListener('keydown', e => {
+    if (e.key === 'Enter') btnLoginAdmin.click();
+  });
+
+  adminModal.addEventListener('click', e => {
+    if (e.target === adminModal) adminModal.classList.remove('active');
+  });
+
+  // CHANGE USERNAME (visible for normal users, hidden when admin)
+  btnChangeName.addEventListener('click', () => {
+    dropdown.classList.remove('active');
+    if (isAdmin) {
+      alert('❌ Admin cannot change username. Refresh page to logout.');
+      return;
+    }
+    newUsernameInput.value = username;
+    usernameError.textContent = '';
+    usernameModal.classList.add('active');
+    setTimeout(() => newUsernameInput.focus(), 100);
+  });
+
+  btnSaveUsername.addEventListener('click', () => {
+    const newName = newUsernameInput.value.trim();
+    if (!newName || newName.length < 2) {
+      usernameError.textContent = 'Name must be at least 2 characters.';
+      return;
+    }
+    if (newName.length > 25) {
+      usernameError.textContent = 'Name must be under 25 characters.';
+      return;
+    }
+    username = newName;
+    localStorage.setItem('plitebook_username', username);
+    usersRef.child(uid).update({ name: username });
+    usernameModal.classList.remove('active');
+  });
+
+  newUsernameInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') btnSaveUsername.click();
+  });
+
+  usernameModal.addEventListener('click', e => {
+    if (e.target === usernameModal) usernameModal.classList.remove('active');
+  });
+
+  // DELETE ALL (admin only)
+  btnDeleteAll.addEventListener('click', () => {
+    dropdown.classList.remove('active');
+    if (!isAdmin) {
+      alert('Only admin can delete all messages.');
+      return;
+    }
+    if (confirm('⚠️ Delete ALL messages? This action cannot be undone!')) {
+      msgsRef.remove().then(() => {
+        chatArea.innerHTML = '<div class="encryption-notice"><i class="fas fa-check-circle"></i> <span>Chat cleared by admin.</span></div>';
+      });
+    }
+  });
+
+  function updateUI() {
+    btnDeleteAll.classList.toggle('hidden', !isAdmin);
+    // Admin থাকলে Change Username লুকানো, সাধারণ ইউজারদের জন্য visible
+    btnChangeName.classList.toggle('hidden', isAdmin);
+  }
+
+  // Initialize user presence with the generated/stored username (userXXXX format)
+  usersRef.child(uid).set({
+    name: username,
+    ts: Date.now(),
+    isAdmin: false
+  });
+  usersRef.child(uid).onDisconnect().remove();
+  typingRef.child(uid).onDisconnect().remove();
+
+  // Load messages (last 80)
+  msgsRef.limitToLast(80).on('child_added', renderMsg);
+
+  updateUI();
+  console.log('✅ Plitebook Chat • userXXXX random names • editable username');
+})();
+</script>
+</body>
+</html>
